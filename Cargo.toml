@@ -17,3 +17,10 @@ rusqlite = ["bdk_wallet/rusqlite"]
 
 [dev-dependencies.multi_keychain_wallet]
 path = "."
+
+[dev-dependencies]
+anyhow = "1"
+
+[[example]]
+name = "keyring"
+required-features = ["rusqlite"]
