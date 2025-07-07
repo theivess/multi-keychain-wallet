@@ -7,7 +7,7 @@ rust-version = "1.63.0"
 [dependencies]
 bdk_wallet = { version = "2.0.0", default-features = false }
 bitcoin = { version = "0.32.6", features = ["serde", "base64"], default-features = false }
-miniscript = { version = "12.3.2", features = ["serde"], default-features = false }
+miniscript = { version = "12.3.4", features = ["serde"], default-features = false }
 serde = { version = "1", features = ["derive"] }
 
 [features]
