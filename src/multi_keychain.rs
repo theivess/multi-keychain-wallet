@@ -3,6 +3,7 @@
 mod changeset;
 pub mod keyring;
 mod wallet;
+pub mod errors;
 
 pub use changeset::*;
 pub use keyring::KeyRing;
