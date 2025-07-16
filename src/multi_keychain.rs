@@ -4,6 +4,7 @@ mod changeset;
 pub mod keyring;
 mod wallet;
 pub mod errors;
+mod tx_builder;
 
 pub use changeset::*;
 pub use keyring::KeyRing;
