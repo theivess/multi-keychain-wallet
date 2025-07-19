@@ -91,6 +91,52 @@ where
 
         Ok(utxos)
     }
+
+    fn select_coins(&self, mut utxos: Vec<LocalUtxo<K>>, fee_rate: FeeRate) -> Result<Vec<LocalUtxo<K>>, WalletError> {
+        if utxos.is_empty() {
+            return Err(TxBuilderError::NoUtxos.into());
+        }
+
+        // Sort by value (largest first)
+        utxos.sort_by(|a, b| b.txout.value.cmp(&a.txout.value));
+
+        if self.drain_wallet {
+            return Ok(utxos);
+        }
+
+        let target: Amount = self.recipients.iter().map(|(_, amount)| *amount).sum();
+        let mut selected = Vec::new();
+        let mut selected_value = Amount::ZERO;
+
+        for utxo in utxos {
+            selected.push(utxo);
+            selected_value += selected.last().unwrap().txout.value;
+
+            let estimated_fee = fee_rate.fee_vb(self.estimate_tx_size(selected.len(), self.recipients.len())).unwrap_or(Amount::ZERO);
+
+            if selected_value >= target + estimated_fee {
+                break;
+            }
+        }
+
+        let final_fee = fee_rate.fee_vb(self.estimate_tx_size(selected.len(), self.recipients.len())).unwrap_or(Amount::ZERO);
+        if selected_value < target + final_fee {
+            return Err(TxBuilderError::InsufficientFunds {
+                required: (target + final_fee).to_sat(),
+                available: selected_value.to_sat()
+            }.into());
+        }
+
+        Ok(selected)
+    }
+
+    fn estimate_tx_size(&self, inputs: usize, outputs: usize) -> u64 {
+        // Simplified transaction size estimation
+        let base_size = 10u64; // version, locktime, etc.
+        let input_size = inputs as u64 * 148; // approximate P2WPKH input size
+        let output_size = outputs as u64 * 34; // approximate output size
+        base_size + input_size + output_size
+    }
 }
 
 #[derive(Debug, Clone)]
