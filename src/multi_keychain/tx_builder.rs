@@ -137,6 +137,86 @@ where
         let output_size = outputs as u64 * 34; // approximate output size
         base_size + input_size + output_size
     }
+
+    fn create_psbt(&mut self, selected_utxos: Vec<LocalUtxo<K>>, fee_rate: FeeRate) -> Result<(Psbt, TransactionDetails), WalletError> {
+        let selected_value: Amount = selected_utxos.iter().map(|u| u.txout.value).sum();
+        let target_value: Amount = self.recipients.iter().map(|(_, amount)| *amount).sum();
+        let estimated_fee = fee_rate.fee_vb(self.estimate_tx_size(selected_utxos.len(), self.recipients.len())).unwrap_or(Amount::ZERO);
+
+        let mut tx = Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: Vec::new(),
+            output: Vec::new(),
+        };
+
+        // Add inputs
+        for utxo in &selected_utxos {
+            tx.input.push(bitcoin::TxIn {
+                previous_output: utxo.outpoint,
+                script_sig: bitcoin::ScriptBuf::new(),
+                sequence: bitcoin::Sequence::ENABLE_RBF_NO_LOCKTIME,
+                witness: bitcoin::Witness::new(),
+            });
+        }
+
+        // Add outputs
+        if self.drain_wallet {
+            if let Some((address, _)) = self.recipients.first() {
+                tx.output.push(TxOut {
+                    value: selected_value - estimated_fee,
+                    script_pubkey: address.script_pubkey(),
+                });
+            }
+        } else {
+            for (address, amount) in &self.recipients {
+                tx.output.push(TxOut {
+                    value: *amount,
+                    script_pubkey: address.script_pubkey(),
+                });
+            }
+
+            // Add change if needed
+            let change = selected_value - target_value - estimated_fee;
+            if change > Amount::from_sat(546) { // dust threshold
+                if let Some(keychain) = selected_utxos.first().map(|u| u.keychain.clone()) {
+                    if let Some(((_, _), change_addr)) = self.wallet.reveal_next_address(keychain) {
+                        tx.output.push(TxOut {
+                            value: change,
+                            script_pubkey: change_addr.script_pubkey(),
+                        });
+                    }
+                }
+            }
+        }
+
+        let psbt = Psbt::from_unsigned_tx(tx)
+            .map_err(|_| TxBuilderError::PsbtCreation)?;
+
+        let details = TransactionDetails {
+            txid: psbt.unsigned_tx.compute_txid(),
+            sent: if self.drain_wallet { selected_value - estimated_fee } else { target_value },
+            received: Amount::ZERO,
+            fee: Some(estimated_fee),
+        };
+
+        Ok((psbt, details))
+    }
+
+    pub fn finish(mut self) -> Result<(Psbt, TransactionDetails), WalletError> {
+        if self.recipients.is_empty() && !self.drain_wallet {
+            return Err(TxBuilderError::NoRecipients.into());
+        }
+
+        let available_utxos = self.get_available_utxos()?;
+        let fee_rate = self.fee_rate.unwrap_or(FeeRate::from_sat_per_vb_unchecked(1));
+
+        // Simple coin selection
+        let selected_utxos = self.select_coins(available_utxos, fee_rate)?;
+        let (psbt, details) = self.create_psbt(selected_utxos, fee_rate)?;
+
+        Ok((psbt, details))
+    }
 }
 
 #[derive(Debug, Clone)]
