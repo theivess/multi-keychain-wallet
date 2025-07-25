@@ -1,4 +1,3 @@
-// File: src/multi_keychain/tx_builder.rs
 use bitcoin::{Address, Amount, FeeRate, OutPoint, Transaction, TxOut, Psbt};
 use crate::bdk_chain::CanonicalizationParams;
 use alloc::vec::Vec;

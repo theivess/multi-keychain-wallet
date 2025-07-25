@@ -1,7 +1,9 @@
 use core::fmt;
+use alloc::vec::Vec;
 
 use bitcoin::Address;
 use miniscript::{Descriptor, DescriptorPublicKey};
+use crate::bdk_chain::CanonicalizationParams;
 
 #[cfg(feature = "rusqlite")]
 use bdk_chain::rusqlite;
@@ -214,10 +216,51 @@ where
             Some(&self.stage)
         }
     }
+    /// Build a transaction with the transaction builder
+    pub fn build_tx(&mut self) -> crate::multi_keychain::tx_builder::TxBuilder<K> {
+        crate::multi_keychain::tx_builder::TxBuilder::new(self)
+    }
+
+    /// List all available keychains
+    pub fn list_keychains(&self) -> Vec<K> {
+        self.keyring.descriptors.keys().cloned().collect()
+    }
+
+    /// Get descriptor for a specific keychain
+    pub fn get_keychain_descriptor(&self, keychain: &K) -> Option<&Descriptor<DescriptorPublicKey>> {
+        self.keyring.descriptors.get(keychain)
+    }
+
+    /// Remove a keychain from the wallet
+    pub fn remove_keychain(&mut self, keychain: &K) -> bool {
+        self.keyring.descriptors.remove(keychain).is_some()
+    }
+
+    /// Check if a keychain exists
+    pub fn has_keychain(&self, keychain: &K) -> bool {
+        self.keyring.descriptors.contains_key(keychain)
+    }
+
+    /// Get the total number of keychains
+    pub fn keychain_count(&self) -> usize {
+        self.keyring.descriptors.len()
+    }
+    
+    /// Get network for this wallet
+    pub fn network(&self) -> bitcoin::Network {
+        self.keyring.network
+    }
+
+    /// Validate all keychains in the wallet
+    pub fn validate_keychains(&self) -> Result<(), crate::multi_keychain::errors::WalletError> {
+        self.keyring.validate().map_err(Into::into)
+    }
+
 }
 
 #[cfg(feature = "rusqlite")]
 use bdk_chain::DescriptorId;
+use crate::multi_keychain::tx_builder::LocalUtxo;
 
 // TODO: This should probably be handled by `PersistedWallet` or similar
 #[cfg(feature = "rusqlite")]

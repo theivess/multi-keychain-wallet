@@ -1,6 +1,3 @@
-// File: src/multi_keychain/keyring.rs (fixed validation methods)
-//! [`KeyRing`].
-
 use bdk_chain::{DescriptorExt, Merge};
 use bdk_wallet::descriptor::IntoWalletDescriptor;
 use bitcoin::{

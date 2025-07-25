@@ -1,4 +1,3 @@
-// File: src/multi_keychain/errors.rs
 use bdk_wallet::descriptor::DescriptorError;
 use bitcoin::Network;
 
