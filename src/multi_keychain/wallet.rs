@@ -256,6 +256,37 @@ where
         self.keyring.validate().map_err(Into::into)
     }
 
+    /// Get balance breakdown by keychain
+    pub fn balance_by_keychain(&self) -> crate::collections::BTreeMap<K, bdk_chain::Balance> {
+        use bdk_chain::CanonicalizationParams;
+
+        let chain = &self.chain;
+        let tip = chain.tip().block_id();
+        let params = CanonicalizationParams::default();
+
+        let mut balances = crate::collections::BTreeMap::new();
+
+        for (keychain, _) in &self.keyring.descriptors {
+            let keychain_outpoints: Vec<_> = self.tx_graph.index
+                .outpoints()
+                .iter().filter_map(|((k, _), outpoint)| {
+                if k == keychain { Some(*outpoint) } else { None }
+            })
+                .collect();
+
+            let balance = self.tx_graph.graph().balance(
+                chain,
+                tip,
+                params.clone(),
+                keychain_outpoints.iter().map(|&op| ((), op)),
+                |_, _| false,
+            );
+
+            balances.insert(keychain.clone(), balance);
+        }
+
+        balances
+    }
 }
 
 #[cfg(feature = "rusqlite")]
