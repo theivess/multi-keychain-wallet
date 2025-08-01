@@ -287,6 +287,52 @@ where
 
         balances
     }
+
+    /// Get all revealed addresses for a keychain
+    pub fn revealed_addresses(&self, keychain: &K) -> Vec<(u32, Address)> {
+        let mut addresses = Vec::new();
+        let spk_iter = self.tx_graph.index.revealed_keychain_spks(keychain.clone());
+
+        for (index, spk) in spk_iter {
+            if let Ok(address) = Address::from_script(&spk, self.keyring.network) {
+                addresses.push((index, address));
+            }
+        }
+
+        addresses
+    }
+
+    /// Get all unspent outputs for a specific keychain
+    pub fn list_unspent_for_keychain(&self, keychain: &K) -> Vec<LocalUtxo<K>> {
+        let chain = &self.chain;
+        let tip = chain.tip().block_id();
+        let mut utxos = Vec::new();
+
+        for ((k, index), outpoint) in self.tx_graph.index.outpoints() {
+            if k == keychain {
+                if let Some(tx_node) = self.tx_graph.graph().get_tx_node(outpoint.txid) {
+                    if let Some(txout) = tx_node.tx.output.get(outpoint.vout as usize) {
+                        let is_unspent = self.tx_graph.graph()
+                            .filter_chain_unspents(chain, tip, CanonicalizationParams::default(), [((), *outpoint)].iter().cloned())
+                            .next()
+                            .is_some();
+
+                        if is_unspent {
+                            utxos.push(LocalUtxo {
+                                outpoint: *outpoint,
+                                txout: txout.clone(),
+                                keychain: k.clone(),
+                                derivation_index: *index,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        utxos
+    }
+
 }
 
 #[cfg(feature = "rusqlite")]
